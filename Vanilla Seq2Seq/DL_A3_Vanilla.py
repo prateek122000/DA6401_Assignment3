@@ -1,9 +1,5 @@
 # -*- coding: utf-8 -*-
 
-
-'''
-Imports
-'''
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
