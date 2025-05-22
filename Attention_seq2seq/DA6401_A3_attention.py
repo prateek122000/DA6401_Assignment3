@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Imports
-"""
+
 
 from google.colab import files
 uploaded = files.upload()
