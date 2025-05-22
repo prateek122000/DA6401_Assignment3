@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 """
-
 Imports
 """
 
@@ -1801,9 +1800,320 @@ def _set_axis_labels(ax, input_text, output_text, font):
     ax.xaxis.set_major_locator(ticker.MultipleLocator(1))
     ax.yaxis.set_major_locator(ticker.MultipleLocator(1))
 
+"""
+Geting the connectivity html file.
+"""
+
+def cstr(s, color='black'):
+    """
+    Create HTML text element with background color styling.
+
+    Args:
+        s: Text content to style
+        color: Background color for the text
+
+    Returns:
+        HTML formatted string with styling
+    """
+    if s.strip() == '':
+        # Handle whitespace characters with special padding
+        return f'<span style="color:#000000;padding-left:10px;background-color:{color};">&nbsp;</span>'
+    else:
+        # Regular text with background color
+        return f'<span style="color:#000000;background-color:{color};">{s}&nbsp;</span>'
 
 
+def print_color(t):
+    """
+    Display colored HTML text from tuples of (text, color) pairs.
 
+    Args:
+        t: List of tuples containing (text, color) pairs
+    """
+    # Combine all HTML elements into single string
+    html_content = ''.join([cstr(text_item, color=color_item) for text_item, color_item in t])
+
+    # Display the HTML (assumes display and html_print are available in environment)
+    display(html_print(html_content))
+
+
+def get_clr(value):
+    """
+    Map attention weight values to appropriate background colors.
+    Uses gradient from blue (low attention) to red (high attention).
+
+    Args:
+        value: Attention weight value (expected range 0-1)
+
+    Returns:
+        Hex color code string
+    """
+    # Color palette: blue tones for low values, red tones for high values
+    color_palette = [
+        '#85c2e1', '#89c4e2', '#95cae5', '#99cce6', '#a1d0e8',
+        '#b2d9ec', '#baddee', '#c2e1f0', '#eff7fb', '#f9e8e8',
+        '#f9e8e8', '#f9d4d4', '#f9bdbd', '#f8a8a8', '#f68f8f',
+        '#f47676', '#f45f5f', '#f34343', '#f33b3b', '#f42e2e'
+    ]
+
+    # Scale value to color index (0-19)
+    color_index = min(int((value * 100) / 5), len(color_palette) - 1)
+    return color_palette[color_index]
+
+
+def visualize(input_word, output_word, att_w):
+    """
+    Create visualization of attention weights between input and output sequences.
+
+    Args:
+        input_word: List of input tokens/characters
+        output_word: List of output tokens/characters
+        att_w: 2D array of attention weights [output_len x input_len]
+    """
+    # Process each output character
+    for output_idx in range(len(output_word)):
+        print(f"\nOutput character: {output_word[output_idx]}\n")
+
+        # Create color-coded representation for current output character
+        colored_tokens = []
+
+        # Map each input character to its attention weight color
+        for input_idx in range(len(att_w[output_idx])):
+            attention_weight = att_w[output_idx][input_idx]
+            background_color = get_clr(attention_weight)
+
+            # Create tuple of (character, color) for visualization
+            token_color_pair = (input_word[input_idx], background_color)
+            colored_tokens.append(token_color_pair)
+
+        # Display the colored sequence
+        print_color(colored_tokens)
+
+"""
+Code for connectivity visualisation.
+"""
+import os
+
+def get_shade_color(value):
+    """
+    Convert attention weight value to corresponding green shade color.
+    Higher values get darker green colors to indicate stronger connections.
+
+    Args:
+        value: Attention weight value (0-1 range)
+
+    Returns:
+        Hex color code string representing green shade
+    """
+    # Green gradient palette from light to dark
+    green_shades = [
+        '#00fa00', '#00f500', '#00eb00', '#00e000', '#00db00',
+        '#00d100', '#00c700', '#00c200', '#00b800', '#00ad00',
+        '#00a800', '#009e00', '#009400', '#008f00', '#008500',
+        '#007500', '#007000', '#006600', '#006100', '#005c00',
+        '#005200', '#004d00', '#004700', '#003d00', '#003800',
+        '#003300', '#002900', '#002400', '#001f00', '#001400'
+    ]
+
+    # Map value to color index
+    shade_index = min(int((value * 100) / 5), len(green_shades) - 1)
+    return green_shades[shade_index]
+
+
+def create_file(text_colors, input_word, output_word, file_path=None):
+    """
+    Generate interactive HTML file for connectivity visualization.
+
+    Args:
+        text_colors: 3D list of color codes for each word pair
+        input_word: List of input word sequences
+        output_word: List of output word sequences
+        file_path: Directory path for saving HTML file
+    """
+    if file_path is None:
+        file_path = os.getcwd()
+
+    # Initialize HTML document structure
+    html_content = build_html_header()
+
+    # Add JavaScript color data
+    html_content += generate_color_array(text_colors, output_word)
+
+    # Add interactive JavaScript handlers
+    html_content += generate_mouseover_handlers(input_word, output_word)
+
+    # Close JavaScript section and add body
+    html_content += close_script_and_add_body()
+
+    # Generate HTML content for each sequence
+    for sequence_idx in range(3):
+        html_content += create_sequence_section(
+            sequence_idx, input_word[sequence_idx], output_word[sequence_idx]
+        )
+
+        if sequence_idx < 2:
+            html_content += add_section_separator()
+
+    # Close HTML document
+    html_content += close_html_document()
+
+    # Write to file
+    output_file = os.path.join(file_path, "connectivity.html")
+    with open(output_file, "w", encoding="utf-8") as f:
+        f.write(html_content)
+
+
+def build_html_header():
+    """Build the HTML document header with jQuery."""
+    return '''<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script>
+        $(document).ready(function(){
+        var col = ['''
+
+
+def generate_color_array(text_colors, output_word):
+    """Generate JavaScript color array from text_colors data."""
+    color_array_content = ""
+
+    for seq_idx in range(3):
+        for word_idx in range(len(output_word[seq_idx])):
+            color_array_content += "["
+
+            # Add colors for each character
+            colors_for_word = text_colors[seq_idx][word_idx]
+            for color_idx, color in enumerate(colors_for_word):
+                color_array_content += f'"{color}"'
+                if color_idx < len(colors_for_word) - 1:
+                    color_array_content += ","
+
+            color_array_content += "],"
+
+    # Remove trailing comma and close array
+    return color_array_content.rstrip(",") + "];\n"
+
+
+def generate_mouseover_handlers(input_word, output_word):
+    """Generate JavaScript mouseover and mouseout event handlers."""
+    handler_content = ""
+
+    for seq_idx in range(3):
+        for output_idx in range(len(output_word[seq_idx])):
+            # Create mouseover handler
+            handler_content += f'$(".h{seq_idx}{output_idx}").mouseover(function(){{\n'
+
+            for input_idx in range(len(input_word[seq_idx])):
+                color_ref = f"col[{output_idx}][{input_idx}]"
+                handler_content += f'$(".t{seq_idx}{input_idx}").css("background-color", {color_ref});\n'
+
+            handler_content += "});\n"
+
+            # Create mouseout handler (reset all backgrounds)
+            handler_content += f'$(".h{seq_idx}{output_idx}").mouseout(function(){{\n'
+
+            for reset_seq in range(3):
+                for reset_input in range(len(input_word[reset_seq])):
+                    handler_content += f'$(".t{reset_seq}{reset_input}").css("background-color", "#ffff99");\n'
+
+            handler_content += "});\n"
+
+    return handler_content
+
+
+def close_script_and_add_body():
+    """Close JavaScript section and start HTML body."""
+    return '''});
+</script>
+</head>
+<body>
+    <h1>Connectivity:</h1>
+    <p>The connection strength between the target for the selected character and the input characters is highlighted in green (reset). Hover over the text to change the selected character.</p>
+    <div style="background-color:#ffff99;color:black;padding:2%; margin:4%;">
+    <p>
+    <div>Output:</div>
+    <div style='display:flex; border: 2px solid #d0cccc; padding: 8px; margin: 8px;'>'''
+
+
+def create_sequence_section(seq_idx, input_sequence, output_sequence):
+    """Create HTML section for one input/output sequence pair."""
+    section_content = ""
+
+    # Add output characters
+    for char_idx, char in enumerate(output_sequence):
+        section_content += f'\n\t<div class="h{seq_idx}{char_idx}">{char}</div>'
+
+    section_content += '''</div>
+    </p>
+    <p>
+    <div>Input:</div>
+    <div style='display:flex; border: 2px solid #d0cccc; padding: 8px; margin: 8px;'>'''
+
+    # Add input characters
+    for char_idx, char in enumerate(input_sequence):
+        section_content += f'\n\t<div class="t{seq_idx}{char_idx}">{char}</div>'
+
+    return section_content
+
+
+def add_section_separator():
+    """Add separator between sections."""
+    return '''</div></p></div><p></p></div>
+    <div style="background-color:#ffff99;color:black;padding:2%; margin:4%;">
+    <div>Output:</div>
+    <div style='display:flex; border: 2px solid #d0cccc; padding: 8px; margin: 8px;'>'''
+
+
+def close_html_document():
+    """Close the HTML document structure."""
+    return '''
+        </div>
+        </p>
+        </div>
+        </body>
+</html>'''
+
+
+def connectivity(input_words, rnn_type, file_path):
+    """
+    Main function to generate connectivity visualization HTML file.
+
+    Args:
+        input_words: List of 3 input word sequences
+        rnn_type: Type of RNN model to use for inference
+        file_path: Directory path for saving output file
+    """
+    # Initialize data containers
+    processed_colors = []
+    processed_input_words = []
+    processed_output_words = []
+
+    # Process each of the 3 input sequences
+    for sequence_idx in range(3):
+        # Get model predictions and attention weights
+        predicted_output, processed_input, _, attention_matrix = inference_model(
+            input_words[sequence_idx], rnn_type
+        )
+
+        # Convert attention weights to color codes
+        sequence_colors = []
+        for output_pos in range(len(predicted_output)):
+            color_row = []
+            for input_pos in range(len(attention_matrix[output_pos])):
+                attention_value = attention_matrix[output_pos][input_pos]
+                color_code = get_shade_color(attention_value)
+                color_row.append(color_code)
+            sequence_colors.append(color_row)
+
+        # Store processed data
+        processed_colors.append(sequence_colors)
+        processed_input_words.append(processed_input)
+        processed_output_words.append(predicted_output)
+
+    # Generate HTML visualization file
+    create_file(processed_colors, processed_input_words, processed_output_words, file_path)
 
 def transliterate(input_word, rnn_type, file_name=None, visual_flag=True):
     # Set default file path if none is provided
